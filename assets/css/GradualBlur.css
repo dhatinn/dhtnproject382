@@ -1,0 +1,23 @@
+/* GradualBlur.css - Multi-layer Progressive Backdrop Blur */
+.gradual-blur {
+  pointer-events: none;
+  position: absolute;
+  overflow: hidden;
+  isolation: isolate;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.gradual-blur-layer {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.gradual-blur-wash {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}

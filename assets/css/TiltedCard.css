@@ -1,0 +1,293 @@
+/* ========================================================
+   TiltedCard.css - 3D Interactive Parallax Tilt Card
+   Spring physics, specular glare, ambient shadow & rim edge
+   ======================================================== */
+
+.tilted-card {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  margin: 0;
+  outline: none;
+  touch-action: pan-y pinch-zoom;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  perspective: 800px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.tilted-card[data-interactive] {
+  cursor: pointer;
+}
+
+.tilted-card[data-active] {
+  z-index: 10;
+}
+
+.tilted-card__shadow {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--tc-radius, 16px);
+  background: var(--tc-shadow-color, rgba(0, 0, 0, 0.4));
+  filter: blur(18px);
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform, opacity;
+  z-index: 0;
+}
+
+.tilted-card__body {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  display: flex;
+  flex-direction: column;
+  z-index: 1;
+}
+
+.tilted-card__face {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: var(--tc-radius, 16px);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card, #FFFFFF);
+  border: 1px solid var(--border, #F0EAE1);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+}
+
+.tilted-card__back {
+  position: absolute;
+  inset: 0;
+  transform: rotateY(180deg);
+}
+
+.tilted-card__img {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.tilted-card__layer {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+}
+
+.tilted-card__img,
+.tilted-card__layer {
+  transform: translate3d(
+    calc(var(--tc-px, 0) * var(--tc-depth, 0) * 1px),
+    calc(var(--tc-py, 0) * var(--tc-depth, 0) * 1px),
+    0
+  );
+}
+
+.tilted-card__glare {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  border-radius: inherit;
+  background: radial-gradient(
+    farthest-corner circle at var(--tc-gx, 50%) var(--tc-gy, 50%),
+    rgba(var(--tc-glare-rgb, 255, 255, 255), calc(var(--tc-glare, 0) * 0.38)) 0%,
+    rgba(var(--tc-glare-rgb, 255, 255, 255), calc(var(--tc-glare, 0) * 0.32)) 12%,
+    rgba(var(--tc-glare-rgb, 255, 255, 255), calc(var(--tc-glare, 0) * 0.22)) 25%,
+    rgba(var(--tc-glare-rgb, 255, 255, 255), calc(var(--tc-glare, 0) * 0.12)) 38%,
+    rgba(var(--tc-glare-rgb, 255, 255, 255), calc(var(--tc-glare, 0) * 0.04)) 50%,
+    rgba(var(--tc-glare-rgb, 255, 255, 255), 0) 65%
+  );
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+.tilted-card__rim {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 0 1px var(--tc-rim-color, rgba(255, 255, 255, 0.12)),
+    inset 0 1px 0 var(--tc-rim-light, rgba(255, 255, 255, 0.22));
+  pointer-events: none;
+}
+
+.tilted-card__edge {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  box-sizing: border-box;
+  padding: 1px;
+  border-radius: inherit;
+  background: radial-gradient(
+    farthest-side circle at var(--tc-gx, 50%) var(--tc-gy, 50%),
+    rgba(var(--tc-glare-rgb, 255, 255, 255), calc(var(--tc-glare, 0) * 0.9)) 0%,
+    rgba(var(--tc-glare-rgb, 255, 255, 255), calc(var(--tc-glare, 0) * 0.7)) 18%,
+    rgba(var(--tc-glare-rgb, 255, 255, 255), calc(var(--tc-glare, 0) * 0.4)) 36%,
+    rgba(var(--tc-glare-rgb, 255, 255, 255), calc(var(--tc-glare, 0) * 0.15)) 54%,
+    rgba(var(--tc-glare-rgb, 255, 255, 255), 0) 80%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+  pointer-events: none;
+}
+
+.tilted-card:focus-visible .tilted-card__rim {
+  box-shadow:
+    inset 0 0 0 2px rgba(212, 175, 55, 0.8),
+    inset 0 0 0 3px rgba(0, 0, 0, 0.2);
+}
+
+.tilted-card__overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  transform: translateZ(var(--tc-lift, 24px));
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  pointer-events: none;
+}
+
+.tilted-card__caption {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 9;
+  margin: 14px 0 0 14px;
+  padding: 4px 10px;
+  border-radius: 99px;
+  background: rgba(20, 16, 24, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  color: #FFFFFF;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform-origin: 0 0;
+  will-change: transform, opacity;
+}
+
+/* Specific styling for food cards using TiltedCard in menu grids */
+.tilted-card.food-card {
+  height: 100%;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+  border-radius: 0 !important;
+  transition: none !important;
+  transform: none !important;
+}
+
+.tilted-card.food-card:hover {
+  transform: none !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
+}
+
+.tilted-card.food-card .tilted-card__shadow {
+  border-radius: 18px;
+  background: rgba(20, 10, 5, 0.45);
+  filter: blur(16px);
+}
+
+.tilted-card.food-card .tilted-card__body {
+  width: 100%;
+  height: 100%;
+}
+
+.tilted-card.food-card .tilted-card__face {
+  background: var(--bg-card, #FFFFFF);
+  border-radius: 18px;
+  border: 1px solid var(--border, #F0EAE1);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.tilted-card.food-card[data-active] .tilted-card__face {
+  border-color: rgba(212, 175, 55, 0.6);
+  box-shadow: 0 12px 30px rgba(158, 27, 27, 0.14);
+}
+
+.tilted-card.food-card .food-thumb-wrap {
+  width: 100%;
+  aspect-ratio: 1 / 0.82;
+  position: relative;
+  overflow: hidden;
+  background: #F3EFEA;
+}
+
+.tilted-card.food-card .food-thumb-wrap .food-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tilted-card.food-card[data-active] .food-thumb {
+  transform: scale(1.06);
+}
+
+.tilted-card.food-card .food-details {
+  padding: 12px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.tilted-card.food-card .food-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 4px;
+  line-height: 1.3;
+}
+
+.tilted-card.food-card .food-desc {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+  margin-bottom: 12px;
+  flex: 1;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.tilted-card.food-card .food-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+}
