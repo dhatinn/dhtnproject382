@@ -1,0 +1,19 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run PHP Restaurant App",
+			"type": "shell",
+			"command": "php",
+			"args": [
+				"-S",
+				"127.0.0.1:8000",
+				"-t",
+				"."
+			],
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "build"
+		}
+	]
+}

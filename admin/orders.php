@@ -11,7 +11,9 @@ $search = cleanInput($_GET['q'] ?? '');
 $query = "SELECT * FROM orders WHERE 1=1";
 $params = [];
 
-if ($statusFilter !== 'all') {
+if ($statusFilter === 'active') {
+    $query .= " AND order_status IN ('pending', 'confirmed', 'cooking', 'ready')";
+} elseif ($statusFilter !== 'all') {
     $query .= " AND order_status = ?";
     $params[] = $statusFilter;
 }
@@ -48,10 +50,10 @@ $orders = $stmt->fetchAll();
     <link rel="stylesheet" href="../assets/css/admin.css?v=<?= time() ?>">
     <link rel="stylesheet" href="../assets/css/GooeyNav.css">
 </head>
-<body>
+<body class="orders-page">
 
     <!-- Sidebar -->
-    <aside class="admin-sidebar">
+    <aside class="admin-sidebar" id="sidebar">
         <div class="sidebar-brand">
             <div class="brand-icon">
                 <i class="fa-solid fa-utensils"></i>
@@ -103,6 +105,7 @@ $orders = $stmt->fetchAll();
             </div>
         </div>
     </aside>
+    <button type="button" class="sidebar-overlay" id="sidebarOverlay" aria-label="Tutup menu navigasi"></button>
 
     <!-- Main -->
     <main class="admin-main">
@@ -110,11 +113,11 @@ $orders = $stmt->fetchAll();
             <div class="header-title">
                 <h1>Daftar Riwayat & Arsip Pesanan</h1>
                 <p>Kelola seluruh transaksi, cetak invoice, dan pantau status pengiriman</p>
+            </div>
             <div class="header-actions">
-                <button type="button" class="mobile-menu-btn" id="mobileMenuBtn" title="Buka Menu">
+                <button type="button" class="mobile-menu-btn" id="mobileMenuBtn" title="Buka Menu" aria-label="Buka menu navigasi" aria-controls="sidebar" aria-expanded="false">
                     <i class="fa-solid fa-bars"></i>
                 </button>
-            </div>
             </div>
         </header>
 
@@ -127,6 +130,7 @@ $orders = $stmt->fetchAll();
                         
                         <select name="status" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.85rem;">
                             <option value="all" <?= $statusFilter === 'all' ? 'selected' : '' ?>>Semua Status</option>
+                            <option value="active" <?= $statusFilter === 'active' ? 'selected' : '' ?>>Pesanan Aktif</option>
                             <option value="pending" <?= $statusFilter === 'pending' ? 'selected' : '' ?>>Menunggu</option>
                             <option value="cooking" <?= $statusFilter === 'cooking' ? 'selected' : '' ?>>Sedang Dimasak</option>
                             <option value="ready" <?= $statusFilter === 'ready' ? 'selected' : '' ?>>Siap Diantar</option>
@@ -152,6 +156,11 @@ $orders = $stmt->fetchAll();
                     <div style="font-weight: 700; font-size: 0.88rem; color: var(--text-secondary);">
                         Ditemukan: <?= count($orders) ?> Pesanan
                     </div>
+                    <?php if ($statusFilter !== 'active'): ?>
+                        <a href="orders.php?status=active" class="btn btn-finish-order btn-sm">
+                            <i class="fa-solid fa-list-check"></i> Pesanan Aktif
+                        </a>
+                    <?php endif; ?>
                 </div>
             </div>
 
@@ -180,7 +189,7 @@ $orders = $stmt->fetchAll();
                                 </tr>
                             <?php else: ?>
                                 <?php foreach ($orders as $ord): ?>
-                                    <tr>
+                                    <tr data-order-row="<?= htmlspecialchars($ord['order_code']) ?>">
                                         <td><strong><?= htmlspecialchars($ord['order_code']) ?></strong></td>
                                         <td>
                                             <div style="font-size: 0.85rem; font-weight: 600;"><?= date('d M Y', strtotime($ord['created_at'])) ?></div>
@@ -206,13 +215,20 @@ $orders = $stmt->fetchAll();
                                             <?php endif; ?>
                                         </td>
                                         <td>
-                                            <select class="form-select btn-sm" onchange="updateStatus('<?= htmlspecialchars($ord['order_code']) ?>', this.value)" style="padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); font-weight: 600;">
-                                                <option value="pending" <?= $ord['order_status'] === 'pending' ? 'selected' : '' ?>>Menunggu</option>
-                                                <option value="cooking" <?= $ord['order_status'] === 'cooking' ? 'selected' : '' ?>>🍳 Dimasak</option>
-                                                <option value="ready" <?= $ord['order_status'] === 'ready' ? 'selected' : '' ?>>🛵 Siap Diantar</option>
-                                                <option value="completed" <?= $ord['order_status'] === 'completed' ? 'selected' : '' ?>>✅ Selesai</option>
-                                                <option value="cancelled" <?= $ord['order_status'] === 'cancelled' ? 'selected' : '' ?>>❌ Dibatalkan</option>
-                                            </select>
+                                            <?php
+                                                $orderStatusLabels = ['pending' => 'Menunggu', 'confirmed' => 'Dikonfirmasi', 'cooking' => 'Dimasak', 'ready' => 'Siap Diantar', 'completed' => 'Selesai', 'cancelled' => 'Dibatalkan'];
+                                            ?>
+                                            <div class="order-status-control" data-order-status-control>
+                                                <button type="button" class="btn order-status-label <?= htmlspecialchars($ord['order_status']) ?>" data-order-status disabled>
+                                                    <?= htmlspecialchars($orderStatusLabels[$ord['order_status']] ?? $ord['order_status']) ?>
+                                                </button>
+                                            <?php if (!in_array($ord['order_status'], ['completed', 'cancelled'], true)): ?>
+                                                <button type="button" class="btn btn-finish-order btn-sm" onclick="finishOrder('<?= htmlspecialchars($ord['order_code']) ?>', this)">
+                                                    <i class="fa-solid fa-circle-check"></i>
+                                                    <span>Selesaikan</span>
+                                                </button>
+                                            <?php endif; ?>
+                                            </div>
                                         </td>
                                         <td style="text-align: right; white-space: nowrap;">
                                             <button type="button" class="btn btn-outline btn-sm" onclick="showDetail('<?= htmlspecialchars($ord['order_code']) ?>')" title="Detail">
@@ -250,9 +266,32 @@ $orders = $stmt->fetchAll();
     </div>
 
     <div id="printArea" style="display: none;"></div>
+    <div class="admin-toast" id="orderToast" role="status" aria-live="polite"></div>
 
     <script>
-        function updateStatus(orderCode, newStatus) {
+        const sidebar = document.getElementById('sidebar');
+        const sidebarOverlay = document.getElementById('sidebarOverlay');
+        const mobileMenuButton = document.getElementById('mobileMenuBtn');
+
+        function setSidebarOpen(isOpen) {
+            sidebar.classList.toggle('show', isOpen);
+            sidebarOverlay.classList.toggle('active', isOpen);
+            mobileMenuButton.setAttribute('aria-expanded', String(isOpen));
+            mobileMenuButton.setAttribute('aria-label', isOpen ? 'Tutup menu navigasi' : 'Buka menu navigasi');
+        }
+
+        mobileMenuButton.addEventListener('click', () => {
+            setSidebarOpen(!sidebar.classList.contains('show'));
+        });
+        sidebarOverlay.addEventListener('click', () => setSidebarOpen(false));
+        sidebar.querySelectorAll('a').forEach(link => link.addEventListener('click', () => setSidebarOpen(false)));
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape') setSidebarOpen(false);
+        });
+
+        function updateStatus(orderCode, newStatus, button) {
+            button.disabled = true;
+            button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><span>Menyimpan...</span>';
             fetch('api/orders.php?action=update_status', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -261,11 +300,43 @@ $orders = $stmt->fetchAll();
             .then(r => r.json())
             .then(data => {
                 if (data.success) {
-                    alert('Status berhasil diubah!');
+                    updateFinishedAction(orderCode, newStatus, button);
+                    showOrderToast(`Status pesanan ${orderCode} diperbarui.`);
                 } else {
-                    alert('Gagal: ' + data.message);
+                    button.disabled = false;
+                    button.innerHTML = '<i class="fa-solid fa-circle-check"></i><span>Selesaikan</span>';
+                    showOrderToast(data.message || 'Status pesanan gagal diperbarui.', true);
                 }
+            })
+            .catch(() => {
+                button.disabled = false;
+                button.innerHTML = '<i class="fa-solid fa-circle-check"></i><span>Selesaikan</span>';
+                showOrderToast('Koneksi bermasalah. Status belum berubah.', true);
             });
+        }
+
+        function finishOrder(orderCode, button) {
+            updateStatus(orderCode, 'completed', button);
+        }
+
+        function updateFinishedAction(orderCode, status, button) {
+            const row = document.querySelector(`[data-order-row="${CSS.escape(orderCode)}"]`);
+            const statusLabel = row?.querySelector('[data-order-status]');
+            if (status !== 'completed' || !button || !statusLabel) return;
+
+            statusLabel.textContent = 'Selesai';
+            statusLabel.className = 'btn order-status-label completed';
+            statusLabel.disabled = true;
+            button.remove();
+        }
+
+        function showOrderToast(message, isError = false) {
+            const toast = document.getElementById('orderToast');
+            toast.textContent = message;
+            toast.classList.toggle('is-error', isError);
+            toast.classList.add('is-visible');
+            clearTimeout(window.orderToastTimeout);
+            window.orderToastTimeout = setTimeout(() => toast.classList.remove('is-visible'), 2800);
         }
 
         function showDetail(orderCode) {

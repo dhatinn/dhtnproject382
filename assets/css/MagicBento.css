@@ -55,8 +55,14 @@
 
 @media (min-width: 1024px) {
   .magic-bento {
-    grid-template-columns: repeat(4, 1fr);
-    grid-auto-rows: 210px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-rows: 260px;
+  }
+}
+
+@media (min-width: 1440px) {
+  .magic-bento {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
@@ -103,6 +109,13 @@
   --mb-delay: 0ms;
 }
 
+@media (max-width: 767px) {
+  .magic-bento__cell {
+    grid-column: span 1 !important;
+    grid-row: span 1 !important;
+  }
+}
+
 .magic-bento[data-intro] .magic-bento__cell {
   opacity: 0;
   transform: translate3d(0, 16px, 0) scale(0.97);
@@ -140,6 +153,22 @@
 
 .magic-bento__card[data-clickable] {
   cursor: pointer;
+}
+
+.magic-bento__card-link,
+.magic-bento__card-link:hover {
+  color: inherit;
+  text-decoration: none;
+}
+
+.magic-bento__action {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 2px;
+  color: #FCD34D;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .magic-bento__card:focus-visible {
@@ -370,7 +399,7 @@
 
 .magic-bento__chart {
   display: flex;
-  min-height: 100px;
+  min-height: 82px;
   flex: 1;
   flex-direction: column;
   touch-action: pan-y;
@@ -405,11 +434,15 @@
   line-height: 14px;
 }
 
+.magic-bento__bars .magic-bento__figure-note {
+  font-size: 10px;
+}
+
 .magic-bento__plot {
   position: relative;
-  min-height: 70px;
+  min-height: 48px;
   flex: 1;
-  margin-top: 10px;
+  margin-top: 6px;
 }
 
 .magic-bento__plot svg {
@@ -493,6 +526,156 @@
 .magic-bento__bar[data-peak] {
   background: rgb(var(--mb-accent-rgb));
   box-shadow: 0 0 12px rgba(var(--mb-accent-rgb), 0.4);
+}
+
+.magic-bento__bar.is-peak {
+  background: rgb(var(--mb-accent-rgb));
+  box-shadow: 0 0 12px rgba(var(--mb-accent-rgb), 0.4);
+}
+
+.magic-bento__bar-labels {
+  display: flex;
+  gap: 6px;
+  margin-top: 5px;
+  color: var(--mb-muted);
+  font-size: 9px;
+  text-align: center;
+}
+
+.magic-bento__bar-labels span {
+  flex: 1;
+}
+
+.mb-live-list,
+.mb-ranked-list,
+.mb-summary-list {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mb-live-order,
+.mb-ranked-item,
+.mb-summary-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--mb-well-edge);
+  border-radius: 10px;
+  background: var(--mb-well);
+}
+
+.mb-live-order-icon,
+.mb-rank-number {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--mb-tile);
+  color: #FCD34D;
+}
+
+.mb-live-order-copy,
+.mb-ranked-name {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mb-live-order-copy strong,
+.mb-ranked-name {
+  overflow: hidden;
+  color: var(--mb-ink);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mb-live-order-copy small {
+  color: var(--mb-muted);
+  font-size: 10px;
+}
+
+.mb-live-order-status {
+  flex: none;
+  padding: 4px 7px;
+  border-radius: 99px;
+  background: rgba(229, 169, 60, 0.16);
+  color: #FCD34D;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.mb-live-order-status.ready {
+  background: rgba(16, 185, 129, 0.16);
+  color: #6EE7B7;
+}
+
+.mb-ranked-item strong,
+.mb-summary-row strong {
+  flex: none;
+  color: #FCD34D;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.mb-rank-number {
+  color: var(--mb-ink);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.mb-summary-row {
+  justify-content: space-between;
+  padding: 7px 10px;
+  color: var(--mb-muted);
+  font-size: 11px;
+}
+
+.mb-stock-summary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.mb-stock-summary strong {
+  color: var(--mb-ink);
+  font-size: 32px;
+  line-height: 1.1;
+}
+
+.mb-stock-summary span,
+.mb-stock-summary small {
+  color: var(--mb-muted);
+  font-size: 11px;
+}
+
+.mb-stock-summary small.has-unavailable {
+  color: #FCA5A5;
+}
+
+.mb-empty-state {
+  display: flex;
+  min-height: 90px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--mb-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.mb-empty-state i {
+  color: #6EE7B7;
+  font-size: 18px;
 }
 
 .magic-bento__bar:hover {

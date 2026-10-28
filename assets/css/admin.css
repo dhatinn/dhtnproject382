@@ -837,6 +837,125 @@ table.admin-table tbody tr:hover td {
     border-radius: var(--radius-xs);
 }
 
+.order-status-control {
+    display: flex;
+    min-width: 132px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 7px;
+}
+
+.order-status-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 32px;
+    padding: 5px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.04);
+    color: #D4D4D8;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.order-status-label:disabled {
+    cursor: default;
+    opacity: 1;
+}
+
+.order-status-label::before {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #A1A1AA;
+    content: '';
+}
+
+.order-status-label.cooking::before { background: #F59E0B; }
+.order-status-label.ready::before { background: #38BDF8; }
+.order-status-label.completed {
+    border-color: rgba(16, 185, 129, 0.3);
+    background: rgba(16, 185, 129, 0.12);
+    color: #6EE7B7;
+}
+
+.order-status-label.completed::before { background: #10B981; }
+.order-status-label.cancelled::before { background: #EF4444; }
+
+.order-status-control .btn-finish-order {
+    min-height: 34px;
+    padding-inline: 12px;
+}
+
+.btn-finish-order {
+    background: rgba(16, 185, 129, 0.14);
+    border-color: rgba(16, 185, 129, 0.35);
+    color: #6EE7B7;
+}
+
+.btn-finish-order:hover:not(:disabled) {
+    background: #10B981;
+    border-color: #10B981;
+    color: #06281D;
+}
+
+.btn-finish-order:disabled {
+    cursor: wait;
+    opacity: 0.72;
+}
+
+.btn-finish-order.is-finished {
+    background: rgba(16, 185, 129, 0.1);
+    border-color: rgba(16, 185, 129, 0.2);
+    color: #6EE7B7;
+    cursor: default;
+}
+
+.order-finished-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #6EE7B7;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.order-finished-label.is-cancelled {
+    color: #FCA5A5;
+}
+
+.admin-toast {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    z-index: 1200;
+    max-width: min(420px, calc(100vw - 32px));
+    padding: 12px 16px;
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    border-radius: 10px;
+    background: #10251F;
+    color: #A7F3D0;
+    font-size: 0.85rem;
+    font-weight: 700;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(8px);
+    transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.admin-toast.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.admin-toast.is-error {
+    border-color: rgba(239, 68, 68, 0.4);
+    background: #2A1718;
+    color: #FCA5A5;
+}
+
 .btn-whatsapp {
     background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
     color: white !important;
@@ -1184,9 +1303,12 @@ input[type="checkbox"] {
     display: none;
     position: fixed;
     inset: 0;
+    padding: 0;
+    border: 0;
     background: rgba(0, 0, 0, 0.75);
     z-index: 99;
     backdrop-filter: blur(4px);
+    cursor: pointer;
 }
 
 .sidebar-overlay.active { display: block; }
@@ -1241,6 +1363,78 @@ input[type="checkbox"] {
     .metrics-grid { grid-template-columns: 1fr 1fr; }
     .header-title p { display: none; }
     .filter-bar input { min-width: 160px; }
+
+    .orders-page .table-responsive { overflow: visible; }
+    .orders-page table.admin-table { display: block; }
+    .orders-page table.admin-table thead { display: none; }
+    .orders-page table.admin-table tbody {
+        display: grid;
+        gap: 10px;
+        padding: 10px;
+    }
+    .orders-page table.admin-table tbody tr {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 5px 8px;
+        padding: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.025);
+    }
+    .orders-page table.admin-table tbody td {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 3px;
+        padding: 7px 4px;
+        border: 0;
+        font-size: 0.8rem;
+        overflow-wrap: anywhere;
+    }
+    .orders-page table.admin-table tbody td::before {
+        color: #A1A1AA;
+        font-size: 0.62rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+    .orders-page table.admin-table tbody td:nth-child(1) {
+        grid-column: 1 / -1;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        padding-bottom: 10px;
+    }
+    .orders-page table.admin-table tbody td:nth-child(1)::before { content: 'No. Order'; }
+    .orders-page table.admin-table tbody td:nth-child(2)::before { content: 'Tanggal & waktu'; }
+    .orders-page table.admin-table tbody td:nth-child(3)::before { content: 'Pelanggan'; }
+    .orders-page table.admin-table tbody td:nth-child(4)::before { content: 'Layanan'; }
+    .orders-page table.admin-table tbody td:nth-child(5)::before { content: 'Total biaya'; }
+    .orders-page table.admin-table tbody td:nth-child(6)::before { content: 'Pembayaran'; }
+    .orders-page table.admin-table tbody td:nth-child(7) {
+        grid-column: 1 / -1;
+        padding-top: 9px;
+    }
+    .orders-page table.admin-table tbody td:nth-child(7)::before { content: 'Status pesanan'; }
+    .orders-page .order-status-control { width: 100%; }
+    .orders-page .btn-finish-order { justify-content: center; width: 100%; }
+    .orders-page table.admin-table tbody td:nth-child(8) {
+        grid-column: 1 / -1;
+        flex-direction: row;
+        justify-content: flex-start !important;
+        padding-top: 8px;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .orders-page table.admin-table tbody td:nth-child(8)::before {
+        content: 'Aksi';
+        align-self: center;
+        margin-right: auto;
+    }
+    .orders-page table.admin-table tbody td[colspan] {
+        grid-column: 1 / -1;
+        align-items: center;
+        padding: 24px 12px;
+    }
+    .orders-page table.admin-table tbody td[colspan]::before { content: none; }
 }
 
 @media (max-width: 420px) {

@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateCartUI();
     renderServiceTypeUI();
     setupEventListeners();
+    checkLastActiveOrder();
 });
 
 // Sound effect for adding to cart
@@ -46,9 +47,14 @@ function playAddSound() {
 function setupEventListeners() {
     // Search input
     const searchInput = document.getElementById('searchInput');
+    const clearBtn = document.getElementById('searchClearBtn');
     if (searchInput) {
         searchInput.addEventListener('input', (e) => {
             AppState.searchQuery = e.target.value.toLowerCase().trim();
+            if (clearBtn) clearBtn.style.display = AppState.searchQuery ? 'block' : 'none';
+            document.querySelectorAll('.quick-tag').forEach(btn => {
+                btn.classList.toggle('active', btn.innerText.trim().toLowerCase() === AppState.searchQuery);
+            });
             filterMenus();
         });
     }
@@ -127,10 +133,90 @@ function filterMenus() {
     }
 }
 
+// Quick Search Filters & Helpers
+function applyQuickTag(tag) {
+    const searchInput = document.getElementById('searchInput');
+    const clearBtn = document.getElementById('searchClearBtn');
+    if (searchInput) {
+        if (searchInput.value.toLowerCase() === tag.toLowerCase()) {
+            searchInput.value = '';
+            AppState.searchQuery = '';
+            if (clearBtn) clearBtn.style.display = 'none';
+        } else {
+            searchInput.value = tag;
+            AppState.searchQuery = tag.toLowerCase();
+            if (clearBtn) clearBtn.style.display = 'block';
+        }
+        document.querySelectorAll('.quick-tag').forEach(btn => {
+            btn.classList.toggle('active', btn.innerText.trim().toLowerCase() === AppState.searchQuery);
+        });
+        filterMenus();
+        const popularSec = document.getElementById('popularSection');
+        if (popularSec) popularSec.scrollIntoView({ behavior: 'smooth' });
+    }
+}
+
+function clearSearch() {
+    const searchInput = document.getElementById('searchInput');
+    const clearBtn = document.getElementById('searchClearBtn');
+    if (searchInput) {
+        searchInput.value = '';
+        AppState.searchQuery = '';
+        if (clearBtn) clearBtn.style.display = 'none';
+        document.querySelectorAll('.quick-tag').forEach(btn => btn.classList.remove('active'));
+        filterMenus();
+    }
+}
+
+// Flying Cart Particle Animation
+function triggerFlyToCart(sourceEl) {
+    if (!sourceEl) return;
+    try {
+        const rect = sourceEl.getBoundingClientRect();
+        const targetDesk = document.querySelector('.btn-desktop-cart');
+        const targetMobile = document.getElementById('cartBadgeCount') || document.querySelector('.gooey-item');
+        const target = (window.innerWidth >= 1024 && targetDesk) ? targetDesk : (targetMobile || targetDesk);
+
+        if (!target) return;
+        const targetRect = target.getBoundingClientRect();
+
+        const particle = document.createElement('div');
+        particle.className = 'flying-particle';
+        particle.innerHTML = '<i class="fa-solid fa-utensils"></i>';
+        particle.style.left = `${rect.left + rect.width / 2 - 11}px`;
+        particle.style.top = `${rect.top + rect.height / 2 - 11}px`;
+        document.body.appendChild(particle);
+
+        requestAnimationFrame(() => {
+            particle.style.transform = `translate(${targetRect.left + targetRect.width / 2 - (rect.left + rect.width / 2)}px, ${targetRect.top + targetRect.height / 2 - (rect.top + rect.height / 2)}px) scale(0.35)`;
+            particle.style.opacity = '0';
+        });
+
+        setTimeout(() => {
+            particle.remove();
+            const badges = [document.getElementById('desktopCartBadge'), document.getElementById('cartBadgeCount'), document.getElementById('floatCartBadge')];
+            badges.forEach(b => {
+                if (b) {
+                    b.classList.remove('badge-bounce');
+                    void b.offsetWidth;
+                    b.classList.add('badge-bounce');
+                }
+            });
+        }, 750);
+    } catch (e) {}
+}
+
 // Cart Logic
-function addToCart(item, qty = 1, notes = '') {
+function addToCart(item, qty = 1, notes = '', addonPrice = 0, sourceEl = null) {
     playAddSound();
-    const existingIndex = AppState.cart.findIndex(i => i.id === item.id && i.notes === notes);
+    if (sourceEl) {
+        triggerFlyToCart(sourceEl);
+    }
+
+    const basePrice = Number(item.promo_price || item.price);
+    const finalPrice = basePrice + Number(addonPrice || 0);
+
+    const existingIndex = AppState.cart.findIndex(i => i.id === item.id && i.notes === notes && (i.addon_price || 0) === addonPrice);
     
     if (existingIndex > -1) {
         AppState.cart[existingIndex].qty += qty;
@@ -140,7 +226,8 @@ function addToCart(item, qty = 1, notes = '') {
             name: item.name,
             price: item.price,
             promo_price: item.promo_price,
-            final_price: item.promo_price ? item.promo_price : item.price,
+            final_price: finalPrice,
+            addon_price: addonPrice,
             image_url: item.image_url,
             qty: qty,
             notes: notes
@@ -298,10 +385,68 @@ function renderServiceTypeUI() {
     }
 }
 
-// Item Customization Modal
+// Item Customization State
 let activeCustomizingItem = null;
+let activeSpicyLevel = 'Standar Minang';
+let activeCustomAddons = [];
+
+function selectSpicyLevel(labelEl, level) {
+    document.querySelectorAll('.spicy-chip').forEach(c => c.classList.remove('active'));
+    labelEl.classList.add('active');
+    activeSpicyLevel = level;
+}
+
+function toggleCustomAddon(cardEl, price, name) {
+    const chk = cardEl.querySelector('.cust-addon-check');
+    if (!chk) return;
+    chk.checked = !chk.checked;
+    cardEl.classList.toggle('selected', chk.checked);
+
+    if (chk.checked) {
+        if (!activeCustomAddons.some(a => a.name === name)) {
+            activeCustomAddons.push({ name, price: Number(price) });
+        }
+    } else {
+        activeCustomAddons = activeCustomAddons.filter(a => a.name !== name);
+    }
+    updateCustomModalPrice();
+}
+
+function appendKitchenNote(noteText) {
+    const input = document.getElementById('custNotes');
+    if (!input) return;
+    let curr = input.value.trim();
+    if (curr.includes(noteText)) {
+        curr = curr.replace(noteText, '').replace(/,\s*,/g, ',').replace(/^,\s*|,\s*$/g, '').trim();
+    } else {
+        curr = curr ? `${curr}, ${noteText}` : noteText;
+    }
+    input.value = curr;
+
+    document.querySelectorAll('.quick-note-chip').forEach(btn => {
+        btn.classList.toggle('active', input.value.includes(btn.innerText.trim()));
+    });
+}
+
+function updateCustomModalPrice() {
+    if (!activeCustomizingItem) return;
+    const basePrice = Number(activeCustomizingItem.promo_price || activeCustomizingItem.price);
+    const addonTotal = activeCustomAddons.reduce((sum, a) => sum + a.price, 0);
+    const qty = parseInt(document.getElementById('custItemQty').innerText) || 1;
+    const unitPrice = basePrice + addonTotal;
+    const totalPrice = unitPrice * qty;
+
+    const priceBadge = document.getElementById('custAddBtnPrice');
+    if (priceBadge) {
+        priceBadge.innerText = formatRupiah(totalPrice);
+    }
+}
+
 function openCustomizeModal(item) {
     activeCustomizingItem = item;
+    activeSpicyLevel = 'Standar Minang';
+    activeCustomAddons = [];
+
     const modal = document.getElementById('customModal');
     document.getElementById('custItemImage').src = item.image_url;
     document.getElementById('custItemTitle').innerText = item.name;
@@ -309,6 +454,23 @@ function openCustomizeModal(item) {
     document.getElementById('custItemPrice').innerText = formatRupiah(item.promo_price || item.price);
     document.getElementById('custItemQty').innerText = '1';
     document.getElementById('custNotes').value = '';
+
+    // Reset spicy chips
+    document.querySelectorAll('.spicy-chip').forEach((c, idx) => {
+        c.classList.toggle('active', idx === 0);
+    });
+
+    // Reset addons
+    document.querySelectorAll('.cust-addon-item').forEach(el => {
+        el.classList.remove('selected');
+        const chk = el.querySelector('.cust-addon-check');
+        if (chk) chk.checked = false;
+    });
+
+    // Reset quick notes
+    document.querySelectorAll('.quick-note-chip').forEach(b => b.classList.remove('active'));
+
+    updateCustomModalPrice();
     modal.classList.add('active');
 }
 
@@ -323,13 +485,31 @@ function adjustCustomQty(delta) {
     curr += delta;
     if (curr < 1) curr = 1;
     el.innerText = curr;
+    updateCustomModalPrice();
 }
 
 function confirmCustomAddToCart() {
     if (!activeCustomizingItem) return;
     const qty = parseInt(document.getElementById('custItemQty').innerText) || 1;
-    const note = document.getElementById('custNotes').value.trim();
-    addToCart(activeCustomizingItem, qty, note);
+    let userNotes = document.getElementById('custNotes').value.trim();
+
+    const noteParts = [];
+    if (activeSpicyLevel && activeSpicyLevel !== 'Standar Minang') {
+        noteParts.push(`[Level: ${activeSpicyLevel}]`);
+    }
+    if (activeCustomAddons.length > 0) {
+        const addonNames = activeCustomAddons.map(a => a.name).join(', ');
+        noteParts.push(`[Ekstra: ${addonNames}]`);
+    }
+    if (userNotes) {
+        noteParts.push(userNotes);
+    }
+
+    const fullNote = noteParts.join(' ');
+    const addonPrice = activeCustomAddons.reduce((sum, a) => sum + a.price, 0);
+
+    const btn = document.getElementById('custAddBtn');
+    addToCart(activeCustomizingItem, qty, fullNote, addonPrice, btn);
     closeCustomizeModal();
 }
 
@@ -477,11 +657,13 @@ function submitOrder() {
         table_number: type === 'dine_in' ? table : null,
         delivery_address: type === 'delivery' ? address : null,
         payment_method: paymentMethod,
+        payment_channel: paymentMethod === 'doku' ? document.getElementById('chkDokuChannel').value : null,
         notes: customerNotes,
         items: AppState.cart.map(i => ({
             menu_id: i.id,
             quantity: i.qty,
-            notes: i.notes
+            notes: i.notes,
+            addon_price: i.addon_price || 0
         }))
     };
 
@@ -502,6 +684,8 @@ function submitOrder() {
 
         const data = res.data;
         AppState.currentOrderCode = data.order_code;
+        localStorage.setItem('hb_last_order_code', data.order_code);
+        checkLastActiveOrder();
 
         // Clear cart
         AppState.cart = [];
@@ -522,16 +706,34 @@ function submitOrder() {
 // QRIS & Payment Modal
 function showPaymentModal(orderData) {
     const modal = document.getElementById('paymentModal');
+    const isDoku = orderData.payment_method === 'doku';
+    const channelLabels = {
+        bank_transfer: 'Transfer bank / Virtual Account',
+        ewallet: 'E-wallet (GoPay, OVO, DANA, ShopeePay)',
+        debit: 'Kartu debit / kredit'
+    };
+    document.getElementById('paymentModalTitle').innerText = isDoku ? 'Pembayaran melalui DOKU' : 'Pembayaran QRIS Harapan Bundo';
     document.getElementById('payOrderCode').innerText = orderData.order_code;
     document.getElementById('payAmount').innerText = orderData.formatted_total;
+    document.getElementById('qrisBranding').hidden = isDoku;
+    document.getElementById('dokuPaymentInfo').hidden = !isDoku;
+    document.getElementById('dokuPaymentChannelText').innerText = channelLabels[orderData.payment_channel] || 'Kanal pembayaran pilihan Anda.';
+    document.getElementById('qrisTimerWrap').hidden = isDoku;
+    document.getElementById('qrisCodeWrap').hidden = isDoku;
+    document.getElementById('qrisInstructions').hidden = isDoku;
+    document.getElementById('btnSimulatePay').innerHTML = isDoku
+        ? '<i class="fa-solid fa-flask"></i><span>Simulasikan Pembayaran Berhasil (Demo)</span>'
+        : '<i class="fa-solid fa-bolt"></i><span>Simulasikan Pembayaran Berhasil (Uji Coba Demo)</span>';
     
     // Generate QR Code URL using QR Server API
-    const qrEncoded = encodeURIComponent(orderData.qris_payload);
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${qrEncoded}&margin=10`;
-    document.getElementById('qrisImg').src = qrUrl;
+    if (!isDoku) {
+        const qrEncoded = encodeURIComponent(orderData.qris_payload);
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${qrEncoded}&margin=10`;
+        document.getElementById('qrisImg').src = qrUrl;
+    }
 
     // Start 15-minute countdown
-    startTimer(15 * 60, document.getElementById('qrisTimer'));
+    if (!isDoku) startTimer(15 * 60, document.getElementById('qrisTimer'));
 
     modal.classList.add('active');
 
@@ -547,6 +749,24 @@ function showPaymentModal(orderData) {
                 }
             });
     }, 3000);
+}
+
+function selectPayOption(labelEl) {
+    document.querySelectorAll('.pay-method-opt').forEach(opt => opt.classList.remove('selected'));
+    labelEl.classList.add('selected');
+    const radio = labelEl.querySelector('input[type="radio"]');
+    if (radio) radio.checked = true;
+    const dokuChannelField = document.getElementById('dokuChannelField');
+    if (dokuChannelField) dokuChannelField.hidden = radio?.value !== 'doku';
+}
+
+function closePaymentModal() {
+    const modal = document.getElementById('paymentModal');
+    if (modal) modal.classList.remove('active');
+    if (AppState.paymentPollInterval) clearInterval(AppState.paymentPollInterval);
+    if (AppState.currentOrderCode) {
+        window.location.href = `track.php?code=${encodeURIComponent(AppState.currentOrderCode)}`;
+    }
 }
 
 function simulatePaymentSuccess() {
@@ -612,4 +832,33 @@ function showToast(text) {
     `;
     document.body.appendChild(toast);
     setTimeout(() => toast.remove(), 2200);
+}
+
+// Active Order Floating Banner
+function checkLastActiveOrder() {
+    const lastCode = localStorage.getItem('hb_last_order_code');
+    const banner = document.getElementById('floatingOrderBanner');
+    const codeEl = document.getElementById('fobOrderCode');
+    if (!banner || !lastCode) return;
+
+    fetch(`api/order_status.php?code=${encodeURIComponent(lastCode)}`)
+        .then(r => r.json())
+        .then(res => {
+            if (res.success && res.data.order_status !== 'completed' && res.data.order_status !== 'cancelled') {
+                if (codeEl) codeEl.innerText = lastCode;
+                banner.style.display = 'flex';
+            } else {
+                banner.style.display = 'none';
+            }
+        })
+        .catch(() => {
+            banner.style.display = 'none';
+        });
+}
+
+function openLastOrderTrack() {
+    const lastCode = localStorage.getItem('hb_last_order_code');
+    if (lastCode) {
+        window.location.href = `track.php?code=${encodeURIComponent(lastCode)}`;
+    }
 }

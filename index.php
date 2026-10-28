@@ -199,20 +199,12 @@ $whatsapp = getSetting('whatsapp_number', '6281234567890');
                         <i class="fa-solid fa-chevron-down service-toggle-arrow"></i>
                     </div>
 
-                    <!-- Search Bar & Instant Quick Filters -->
+                    <!-- Search Bar -->
                     <div class="search-container">
                         <div class="search-bar">
                             <i class="fa-solid fa-magnifying-glass"></i>
                             <input type="text" id="searchInput" class="search-input" placeholder="Cari Rendang, Ayam Pop, Es Tebak...">
                             <button type="button" class="search-clear-btn" id="searchClearBtn" onclick="clearSearch()" style="display:none;" title="Hapus Pencarian">&times;</button>
-                        </div>
-                        <div class="quick-tags-strip">
-                            <span class="quick-tag-label"><i class="fa-solid fa-fire-flame-curved"></i> Populer:</span>
-                            <button type="button" class="quick-tag" onclick="applyQuickTag('Rendang')">Rendang</button>
-                            <button type="button" class="quick-tag" onclick="applyQuickTag('Ayam Pop')">Ayam Pop</button>
-                            <button type="button" class="quick-tag" onclick="applyQuickTag('Gulai Kakap')">Gulai Kakap</button>
-                            <button type="button" class="quick-tag" onclick="applyQuickTag('Tunjang')">Tunjang</button>
-                            <button type="button" class="quick-tag" onclick="applyQuickTag('Es Tebak')">Es Tebak</button>
                         </div>
                     </div>
                 </div>
@@ -239,10 +231,6 @@ $whatsapp = getSetting('whatsapp_number', '6281234567890');
             <div class="hero-card">
                 <!-- Left: Headline & Actions -->
                 <div class="hero-content-left">
-                    <div class="hero-live-badge">
-                        <span class="live-pulse-dot"></span>
-                        <span>Dapur Bundo Buka & Melayani Pesanan (Est. 15-20 mnt)</span>
-                    </div>
                     <div class="hero-tag">
                         <i class="fa-solid fa-crown"></i>
                         <span>Resep Warisan Bundo Sejak 1982</span>
@@ -274,13 +262,6 @@ $whatsapp = getSetting('whatsapp_number', '6281234567890');
                         <div class="carousel-header-badge">
                             <i class="fa-solid fa-fire" style="color: #F59E0B;"></i>
                             <span>Menu Andalan Bundo</span>
-                        </div>
-                        <div class="carousel-effect-pills" title="Pilih Efek Transisi 3D Carousel">
-                            <button type="button" class="effect-pill active" onclick="switchHeroEffect('tilt', this)">Tilt 3D</button>
-                            <button type="button" class="effect-pill" onclick="switchHeroEffect('cube', this)">Cube</button>
-                            <button type="button" class="effect-pill" onclick="switchHeroEffect('scale', this)">Scale</button>
-                            <button type="button" class="effect-pill" onclick="switchHeroEffect('fade', this)">Fade</button>
-                            <button type="button" class="effect-pill" onclick="switchHeroEffect('slide', this)">Slide</button>
                         </div>
                     </div>
 
@@ -332,22 +313,6 @@ $whatsapp = getSetting('whatsapp_number', '6281234567890');
                         </div>
                     </div>
                 </div>
-            </div>
-        </section>
-
-        <!-- Category Pills Bar (Responsive) -->
-        <section class="category-section" data-animated-content="" data-trigger="mount" data-delay="0.15" data-distance="30" data-direction="horizontal" data-duration="0.7">
-            <div class="category-scroll">
-                <div class="cat-pill active" data-category="all">
-                    <i class="fa-solid fa-border-all"></i>
-                    <span>Semua Menu</span>
-                </div>
-                <?php foreach ($categories as $cat): ?>
-                    <div class="cat-pill" data-category="<?= htmlspecialchars($cat['slug']) ?>">
-                        <i class="fa-solid fa-<?= htmlspecialchars($cat['icon'] ?: 'utensils') ?>"></i>
-                        <span><?= htmlspecialchars($cat['name']) ?></span>
-                    </div>
-                <?php endforeach; ?>
             </div>
         </section>
 
@@ -849,30 +814,47 @@ $whatsapp = getSetting('whatsapp_number', '6281234567890');
                     <input type="text" id="chkOrderNotes" class="search-input" placeholder="Misal: Sambal ijo dipisah, kuah gulai dibanyakin" style="border-radius: 12px;">
                 </div>
 
-                <!-- Payment Method -->
-                <div style="margin-bottom: 16px;">
+                <!-- Payment Method Options -->
+                <div style="margin-bottom: 18px;">
                     <label style="display: block; font-size: 0.84rem; font-weight: 700; margin-bottom: 8px;">Pilih Metode Pembayaran:</label>
                     
-                    <label style="display: flex; align-items: center; justify-content: space-between; border: 2px solid var(--primary); background: var(--primary-light); padding: 12px 16px; border-radius: 14px; margin-bottom: 10px; cursor: pointer;">
+                    <!-- QRIS Dinamis -->
+                    <label class="pay-method-opt selected" onclick="selectPayOption(this)">
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <input type="radio" name="chk_payment" value="qris" checked>
                             <div>
-                                <strong style="color: var(--primary); font-size: 0.9rem;">QRIS Dinamis (Otomatis)</strong>
-                                <p style="font-size: 0.72rem; color: var(--text-muted);">BCA, Mandiri, BRI, BNI, GoPay, OVO, Dana, ShopeePay</p>
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <strong style="color: var(--primary); font-size: 0.9rem;">QRIS Dinamis</strong>
+                                    <span style="background: var(--primary); color: white; font-size: 0.65rem; font-weight: 800; padding: 2px 7px; border-radius: 99px;">INSTAN</span>
+                                </div>
+                                <p style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">BCA, Mandiri, BRI, BNI, GoPay, OVO, Dana, ShopeePay</p>
                             </div>
                         </div>
-                        <span style="background: var(--primary); color: white; font-size: 0.68rem; font-weight: 800; padding: 2px 8px; border-radius: 99px;">INSTAN</span>
+                        <i class="fa-solid fa-qrcode" style="font-size: 1.25rem; color: var(--primary);"></i>
                     </label>
 
-                    <label style="display: flex; align-items: center; justify-content: space-between; border: 1.5px solid var(--border); padding: 12px 16px; border-radius: 14px; cursor: pointer;">
+                    <!-- DOKU Payment Gateway -->
+                    <label class="pay-method-opt" onclick="selectPayOption(this)">
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <input type="radio" name="chk_payment" value="doku">
                             <div>
-                                <strong style="font-size: 0.9rem;">DOKU Payment Gateway</strong>
-                                <p style="font-size: 0.72rem; color: var(--text-muted);">Virtual Account & Kartu Kredit</p>
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <strong style="font-size: 0.9rem;">DOKU Payment Gateway</strong>
+                                    <span style="background: #E5E7EB; color: #374151; font-size: 0.65rem; font-weight: 700; padding: 2px 7px; border-radius: 99px;">PILIHAN LENGKAP</span>
+                                </div>
+                                <p style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">Transfer bank / Virtual Account, e-wallet, kartu debit atau kredit</p>
                             </div>
                         </div>
+                        <i class="fa-solid fa-building-columns" style="font-size: 1.15rem; color: #6B7280;"></i>
                     </label>
+                    <div class="doku-channel-field" id="dokuChannelField" hidden>
+                        <label for="chkDokuChannel">Pilih kanal pembayaran DOKU:</label>
+                        <select id="chkDokuChannel" class="search-input">
+                            <option value="bank_transfer">Transfer bank / Virtual Account</option>
+                            <option value="ewallet">E-wallet (GoPay, OVO, DANA, ShopeePay)</option>
+                            <option value="debit">Kartu debit / kredit</option>
+                        </select>
+                    </div>
                 </div>
             </div>
             <div class="drawer-footer">
@@ -886,15 +868,16 @@ $whatsapp = getSetting('whatsapp_number', '6281234567890');
 
     <!-- 5. Drawer: Dynamic QRIS & Payment Screen -->
     <div class="drawer-overlay" id="paymentModal">
-        <div class="drawer-content" style="max-height: 95vh;">
+        <div class="drawer-content modal-dialog-centered">
             <div class="drawer-handle"></div>
             <div class="drawer-header">
-                <h3 class="drawer-title">Pembayaran QRIS Harapan Bundo</h3>
+                <h3 class="drawer-title" id="paymentModalTitle">Pembayaran Pesanan Harapan Bundo</h3>
+                <button type="button" class="drawer-close" onclick="closePaymentModal()">&times;</button>
             </div>
             <div class="drawer-body">
-                <div class="qris-card">
+                <div class="qris-card" id="paymentPresentation">
                     <!-- Standard QRIS Header Image / Branding -->
-                    <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px;">
+                    <div id="qrisBranding" style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px;">
                         <span style="font-weight: 800; font-size: 1.4rem; color: #DC2626; letter-spacing: 1px;">QRIS</span>
                         <span style="font-size: 0.75rem; color: #4B5563; font-weight: 700; border-left: 1px solid #CCC; padding-left: 8px;">PEMBAYARAN DIGITAL ASPI</span>
                     </div>
@@ -902,13 +885,20 @@ $whatsapp = getSetting('whatsapp_number', '6281234567890');
                     <div style="font-size: 0.95rem; font-weight: 800; color: var(--text-main); margin-bottom: 4px;">RM PADANG HARAPAN BUNDO</div>
                     <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 12px;">NMID: ID1020039281720 &bull; Order: <span id="payOrderCode" style="font-weight: 700; color: var(--primary);"></span></div>
 
-                    <div class="qris-timer">
+                    <div id="dokuPaymentInfo" class="doku-payment-info" hidden>
+                        <i class="fa-solid fa-lock"></i>
+                        <strong>Pembayaran melalui DOKU</strong>
+                        <span id="dokuPaymentChannelText">Kanal pembayaran pilihan Anda.</span>
+                        <small>Mode demo: transaksi ini belum terhubung ke checkout DOKU live.</small>
+                    </div>
+
+                    <div class="qris-timer" id="qrisTimerWrap">
                         <i class="fa-solid fa-clock"></i>
                         <span>Selesaikan dalam: </span>
                         <strong id="qrisTimer">15:00</strong>
                     </div>
 
-                    <div class="qris-code-container">
+                    <div class="qris-code-container" id="qrisCodeWrap">
                         <img id="qrisImg" src="" alt="QRIS Code" style="width: 210px; height: 210px; display: block; margin: 0 auto;">
                     </div>
 
@@ -917,7 +907,7 @@ $whatsapp = getSetting('whatsapp_number', '6281234567890');
                         <div id="payAmount" style="font-size: 1.6rem; font-weight: 800; color: var(--primary);">Rp 0</div>
                     </div>
 
-                    <div style="background: #FAF8F5; border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 16px; font-size: 0.78rem; color: var(--text-muted); line-height: 1.5; text-align: left;">
+                    <div id="qrisInstructions" style="background: #FAF8F5; border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 16px; font-size: 0.78rem; color: var(--text-muted); line-height: 1.5; text-align: left;">
                         <strong style="color: var(--text-main); display: block; margin-bottom: 4px;"><i class="fa-solid fa-mobile-screen"></i> Cara Bayar:</strong>
                         1. Buka aplikasi m-Banking (BCA, Mandiri, BRI, BNI) atau e-Wallet (GoPay, OVO, Dana).<br>
                         2. Pilih menu <strong>Scan / Bayar QRIS</strong>.<br>

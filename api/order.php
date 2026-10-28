@@ -23,6 +23,7 @@ $tableNumber = cleanInput($data['table_number'] ?? '');
 $deliveryAddress = cleanInput($data['delivery_address'] ?? '');
 $deliveryNotes = cleanInput($data['delivery_notes'] ?? '');
 $paymentMethod = cleanInput($data['payment_method'] ?? 'qris');
+$paymentChannel = cleanInput($data['payment_channel'] ?? '');
 $notes = cleanInput($data['notes'] ?? '');
 $cartItems = $data['items'] ?? [];
 
@@ -36,6 +37,14 @@ if (empty($customerPhone) || strlen($customerPhone) < 8) {
 
 if (!in_array($orderType, ['dine_in', 'delivery', 'takeaway'])) {
     jsonResponse(['success' => false, 'message' => 'Jenis pesanan tidak valid.'], 422);
+}
+
+if (!in_array($paymentMethod, ['qris', 'doku'], true)) {
+    jsonResponse(['success' => false, 'message' => 'Metode pembayaran tidak valid.'], 422);
+}
+
+if ($paymentMethod === 'doku' && !in_array($paymentChannel, ['bank_transfer', 'ewallet', 'debit'], true)) {
+    jsonResponse(['success' => false, 'message' => 'Kanal pembayaran DOKU tidak valid.'], 422);
 }
 
 if ($orderType === 'dine_in' && empty($tableNumber)) {
@@ -197,6 +206,7 @@ try {
             'total_amount' => $totalAmount,
             'formatted_total' => formatRupiah($totalAmount),
             'payment_method' => $paymentMethod,
+            'payment_channel' => $paymentMethod === 'doku' ? $paymentChannel : null,
             'payment_status' => 'unpaid',
             'qris_payload' => $qrisPayload,
             'track_url' => 'track.php?code=' . urlencode($orderCode)

@@ -12,18 +12,79 @@ $stmtRev = $db->prepare("SELECT SUM(total_amount) FROM orders WHERE payment_stat
 $stmtRev->execute([$today]);
 $todayRevenue = (float)$stmtRev->fetchColumn();
 
+$stmtYesterdayRevenue = $db->prepare("SELECT COALESCE(SUM(total_amount), 0) FROM orders WHERE payment_status = 'paid' AND DATE(created_at) = DATE_SUB(?, INTERVAL 1 DAY)");
+$stmtYesterdayRevenue->execute([$today]);
+$yesterdayRevenue = (float)$stmtYesterdayRevenue->fetchColumn();
+$revenueChange = $yesterdayRevenue > 0 ? (($todayRevenue - $yesterdayRevenue) / $yesterdayRevenue) * 100 : null;
+
 // 2. Total Pesanan Hari Ini
 $stmtOrders = $db->prepare("SELECT COUNT(*) FROM orders WHERE DATE(created_at) = ?");
 $stmtOrders->execute([$today]);
 $todayOrderCount = (int)$stmtOrders->fetchColumn();
 
-// 3. Pesanan Aktif (Cooking or Ready)
-$stmtActive = $db->query("SELECT COUNT(*) FROM orders WHERE order_status IN ('confirmed', 'cooking', 'ready')");
+// 3. Pesanan aktif hari ini
+$stmtActive = $db->prepare("SELECT COUNT(*) FROM orders WHERE DATE(created_at) = ? AND order_status IN ('confirmed', 'cooking', 'ready')");
+$stmtActive->execute([$today]);
 $activeOrderCount = (int)$stmtActive->fetchColumn();
 
 // 4. Total Menu Aktif
 $stmtMenu = $db->query("SELECT COUNT(*) FROM menu_items WHERE is_available = 1");
 $activeMenuCount = (int)$stmtMenu->fetchColumn();
+
+$unavailableMenuCount = (int)$db->query("SELECT COUNT(*) FROM menu_items WHERE is_available = 0")->fetchColumn();
+
+$stmtOrderStatuses = $db->prepare("SELECT order_status, COUNT(*) AS total FROM orders WHERE DATE(created_at) = ? GROUP BY order_status");
+$stmtOrderStatuses->execute([$today]);
+$todayStatusCounts = array_column($stmtOrderStatuses->fetchAll(), 'total', 'order_status');
+$stmtWaitingPayment = $db->prepare("SELECT COUNT(*) FROM orders WHERE DATE(created_at) = ? AND payment_status = 'unpaid'");
+$stmtWaitingPayment->execute([$today]);
+$waitingPaymentCount = (int)$stmtWaitingPayment->fetchColumn();
+$cookingOrderCount = (int)($todayStatusCounts['cooking'] ?? 0);
+$readyOrderCount = (int)($todayStatusCounts['ready'] ?? 0);
+$completedOrderCount = (int)($todayStatusCounts['completed'] ?? 0);
+
+$hourlyBuckets = [];
+for ($hour = 9; $hour < 23; $hour += 2) {
+    $hourlyBuckets[] = [
+        'label' => sprintf('%02d-%02d', $hour, $hour + 2),
+        'orders' => 0,
+        'revenue' => 0.0
+    ];
+}
+$stmtHourly = $db->prepare("SELECT HOUR(created_at) AS order_hour, COUNT(*) AS order_count, COALESCE(SUM(CASE WHEN payment_status = 'paid' THEN total_amount ELSE 0 END), 0) AS revenue FROM orders WHERE DATE(created_at) = ? AND HOUR(created_at) >= 9 AND HOUR(created_at) < 23 GROUP BY HOUR(created_at)");
+$stmtHourly->execute([$today]);
+foreach ($stmtHourly->fetchAll() as $hourRow) {
+    $bucketIndex = intdiv((int)$hourRow['order_hour'] - 9, 2);
+    $hourlyBuckets[$bucketIndex]['orders'] += (int)$hourRow['order_count'];
+    $hourlyBuckets[$bucketIndex]['revenue'] += (float)$hourRow['revenue'];
+}
+$peakBucket = null;
+foreach ($hourlyBuckets as $bucket) {
+    if ($peakBucket === null || $bucket['orders'] > $peakBucket['orders']) {
+        $peakBucket = $bucket;
+    }
+}
+$peakBucketLabel = $peakBucket && $peakBucket['orders'] > 0 ? $peakBucket['label'] . ' WIB' : 'Belum ada pesanan';
+$maxHourlyOrders = max(1, ...array_column($hourlyBuckets, 'orders'));
+$chartLinePath = '';
+foreach ($hourlyBuckets as $index => $bucket) {
+    $x = count($hourlyBuckets) > 1 ? $index * 400 / (count($hourlyBuckets) - 1) : 0;
+    $y = 62 - ($bucket['revenue'] / max(1, max(array_column($hourlyBuckets, 'revenue')))) * 48;
+    $chartLinePath .= ($index === 0 ? 'M' : ' L') . sprintf('%.1f,%.1f', $x, $y);
+}
+$chartAreaPath = $chartLinePath . ' L400,70 L0,70 Z';
+
+$stmtBestSellers = $db->prepare("SELECT oi.menu_name, SUM(oi.quantity) AS quantity_sold FROM order_items oi INNER JOIN orders o ON o.id = oi.order_id WHERE DATE(o.created_at) = ? AND o.order_status <> 'cancelled' GROUP BY oi.menu_name ORDER BY quantity_sold DESC, oi.menu_name ASC LIMIT 4");
+$stmtBestSellers->execute([$today]);
+$todayBestSellers = $stmtBestSellers->fetchAll();
+
+$stmtPaymentMix = $db->prepare("SELECT payment_method, COUNT(*) AS total FROM orders WHERE DATE(created_at) = ? GROUP BY payment_method");
+$stmtPaymentMix->execute([$today]);
+$todayPaymentMix = array_column($stmtPaymentMix->fetchAll(), 'total', 'payment_method');
+
+$stmtKitchenQueue = $db->prepare("SELECT order_code, customer_name, order_status, created_at, order_type, table_number FROM orders WHERE DATE(created_at) = ? AND order_status IN ('confirmed', 'cooking', 'ready') ORDER BY FIELD(order_status, 'ready', 'cooking', 'confirmed'), created_at ASC LIMIT 4");
+$stmtKitchenQueue->execute([$today]);
+$kitchenQueue = $stmtKitchenQueue->fetchAll();
 
 // Fetch Recent Orders (Latest 15)
 $stmtRecent = $db->query("
@@ -138,7 +199,7 @@ $maxId = $db->query("SELECT IFNULL(MAX(id), 0) FROM orders")->fetchColumn();
 
                 <!-- CELL 1: Revenue Analytics (Colspan 2) -->
                 <div class="magic-bento__cell" style="grid-column: span 2; grid-row: span 1;">
-                    <div class="magic-bento__card" data-clickable="">
+                    <a href="orders.php" class="magic-bento__card magic-bento__card-link" data-clickable="">
                         <span class="magic-bento__light"></span>
                         <canvas class="magic-bento__stars"></canvas>
                         <div class="magic-bento__content">
@@ -150,12 +211,12 @@ $maxId = $db->query("SELECT IFNULL(MAX(id), 0) FROM orders")->fetchColumn();
                                 <div class="magic-bento__chart">
                                     <div class="magic-bento__figure">
                                         <span class="magic-bento__figure-value"><?= formatRupiah($todayRevenue) ?></span>
-                                        <span class="magic-bento__figure-note">+24% vs Kemarin</span>
+                                        <span class="magic-bento__figure-note"><?= $revenueChange === null ? 'Belum ada data kemarin' : (($revenueChange >= 0 ? '+' : '') . number_format($revenueChange, 1, ',', '.') . '% vs Kemarin') ?></span>
                                     </div>
-                                    <div class="magic-bento__plot">
+                                    <div class="magic-bento__plot" data-revenue-series="<?= htmlspecialchars(json_encode(array_column($hourlyBuckets, 'revenue')), ENT_QUOTES, 'UTF-8') ?>" data-bucket-labels="<?= htmlspecialchars(json_encode(array_column($hourlyBuckets, 'label')), ENT_QUOTES, 'UTF-8') ?>">
                                         <svg viewBox="0 0 400 70" preserveAspectRatio="none">
-                                            <path class="magic-bento__chart-area" d="M0,55 C40,48 80,42 120,38 C160,34 200,22 240,28 C280,32 320,14 360,18 C380,12 400,8 400,8 L400,70 L0,70 Z"></path>
-                                            <path class="magic-bento__chart-line" d="M0,55 C40,48 80,42 120,38 C160,34 200,22 240,28 C280,32 320,14 360,18 C380,12 400,8 400,8"></path>
+                                            <path class="magic-bento__chart-area" d="<?= htmlspecialchars($chartAreaPath, ENT_QUOTES, 'UTF-8') ?>"></path>
+                                            <path class="magic-bento__chart-line" d="<?= htmlspecialchars($chartLinePath, ENT_QUOTES, 'UTF-8') ?>"></path>
                                         </svg>
                                         <span class="magic-bento__scrub">
                                             <span class="magic-bento__scrub-dot"></span>
@@ -165,17 +226,18 @@ $maxId = $db->query("SELECT IFNULL(MAX(id), 0) FROM orders")->fetchColumn();
                             </div>
                             <div class="magic-bento__text">
                                 <h3 class="magic-bento__title">Total Omzet Masuk Hari Ini</h3>
-                                <p class="magic-bento__description">Geser mouse di atas grafik untuk melihat rincian pendapatan tiap jam operasional.</p>
+                                <p class="magic-bento__description">Omzet transaksi lunas hari ini. Arahkan ke grafik untuk melihat omzet per rentang waktu.</p>
+                                <span class="magic-bento__action">Buka pesanan <i class="fa-solid fa-arrow-right"></i></span>
                             </div>
                         </div>
                         <span class="magic-bento__rim"></span>
                         <span class="magic-bento__border"></span>
-                    </div>
+                    </a>
                 </div>
 
                 <!-- CELL 2: Order Volume Bars -->
                 <div class="magic-bento__cell" style="grid-column: span 1; grid-row: span 1;">
-                    <div class="magic-bento__card" data-clickable="">
+                    <a href="orders.php" class="magic-bento__card magic-bento__card-link" data-clickable="">
                         <span class="magic-bento__light"></span>
                         <canvas class="magic-bento__stars"></canvas>
                         <div class="magic-bento__content">
@@ -187,253 +249,205 @@ $maxId = $db->query("SELECT IFNULL(MAX(id), 0) FROM orders")->fetchColumn();
                                 <div class="magic-bento__bars">
                                     <div class="magic-bento__figure">
                                         <span class="magic-bento__figure-value"><?= $todayOrderCount ?> Pesanan</span>
-                                        <span class="magic-bento__figure-note">Puncak 12:30 WIB</span>
+                                        <span class="magic-bento__figure-note"><?= htmlspecialchars($peakBucketLabel) ?></span>
                                     </div>
                                     <div class="magic-bento__bars-plot">
-                                        <span class="magic-bento__bar" style="--h: 0.38;" title="10:00 WIB"></span>
-                                        <span class="magic-bento__bar" style="--h: 0.55;" title="11:00 WIB"></span>
-                                        <span class="magic-bento__bar" data-peak="" style="--h: 0.95;" title="12:00 WIB (Puncak)"></span>
-                                        <span class="magic-bento__bar" style="--h: 0.72;" title="13:00 WIB"></span>
-                                        <span class="magic-bento__bar" style="--h: 0.46;" title="15:00 WIB"></span>
-                                        <span class="magic-bento__bar" style="--h: 0.82;" title="18:30 WIB"></span>
-                                        <span class="magic-bento__bar" style="--h: 0.64;" title="20:00 WIB"></span>
+                                        <?php foreach ($hourlyBuckets as $bucket): ?>
+                                            <span class="magic-bento__bar<?= $bucket['orders'] > 0 && $bucket['orders'] === $peakBucket['orders'] ? ' is-peak' : '' ?>" style="--h: <?= number_format(max(0.06, $bucket['orders'] / $maxHourlyOrders), 3, '.', '') ?>;" title="<?= htmlspecialchars($bucket['label']) ?> WIB: <?= (int)$bucket['orders'] ?> pesanan"></span>
+                                        <?php endforeach; ?>
+                                    </div>
+                                    <div class="magic-bento__bar-labels">
+                                        <?php foreach ($hourlyBuckets as $bucket): ?>
+                                            <span><?= htmlspecialchars(explode('-', $bucket['label'])[0]) ?></span>
+                                        <?php endforeach; ?>
                                     </div>
                                 </div>
                             </div>
                             <div class="magic-bento__text">
                                 <h3 class="magic-bento__title">Volume Jam Makan</h3>
-                                <p class="magic-bento__description">Distribusi lonjakan transaksi makan siang & santap malam.</p>
+                                <p class="magic-bento__description">Jumlah pesanan per dua jam. Buka daftar untuk memproses antrean.</p>
+                                <span class="magic-bento__action">Kelola antrean <i class="fa-solid fa-arrow-right"></i></span>
                             </div>
                         </div>
                         <span class="magic-bento__rim"></span>
                         <span class="magic-bento__border"></span>
-                    </div>
+                    </a>
                 </div>
 
                 <!-- CELL 3: Active Orders Alert -->
                 <div class="magic-bento__cell" style="grid-column: span 1; grid-row: span 1;">
-                    <div class="magic-bento__card" data-clickable="">
+                    <a href="orders.php" class="magic-bento__card magic-bento__card-link" data-clickable="">
                         <span class="magic-bento__light"></span>
                         <canvas class="magic-bento__stars"></canvas>
                         <div class="magic-bento__content">
                             <div class="magic-bento__header">
                                 <span class="magic-bento__icon"><i class="fa-solid fa-fire-burner" style="color: #F97316;"></i></span>
-                                <span class="magic-bento__label">ANTEAN DAPUR BUNDO</span>
+                                <span class="magic-bento__label">ANTREAN DAPUR BUNDO</span>
                             </div>
                             <div class="magic-bento__visual">
                                 <div style="display: flex; flex-direction: column; align-items: flex-start; justify-content: center; height: 100%;">
                                     <div style="display: flex; align-items: center; gap: 10px;">
                                         <span style="font-size: 2.2rem; font-weight: 800; color: #FFFFFF; font-variant-numeric: tabular-nums;"><?= $activeOrderCount ?></span>
-                                        <span style="background: <?= $activeOrderCount > 0 ? '#FEF3C7' : '#DCFCE7' ?>; color: <?= $activeOrderCount > 0 ? '#B45309' : '#166534' ?>; font-size: 0.75rem; font-weight: 800; padding: 4px 10px; border-radius: 99px;">
-                                            <?= $activeOrderCount > 0 ? 'Sedang Dimasak' : 'Dapur Siaga' ?>
+                                        <span style="background: <?= $cookingOrderCount > 0 ? '#FEF3C7' : '#DCFCE7' ?>; color: <?= $cookingOrderCount > 0 ? '#B45309' : '#166534' ?>; font-size: 0.75rem; font-weight: 800; padding: 4px 10px; border-radius: 99px;">
+                                            <?= $cookingOrderCount ?> dimasak
                                         </span>
                                     </div>
                                     <div style="font-size: 0.8rem; color: var(--mb-muted); margin-top: 6px;">
-                                        <?= $activeMenuCount ?> menu siap disajikan saat ini
+                                        <?= $readyOrderCount ?> siap · <?= $waitingPaymentCount ?> menunggu bayar
                                     </div>
                                 </div>
                             </div>
                             <div class="magic-bento__text">
-                                <h3 class="magic-bento__title">Pesanan Aktif Perlu Disajikan</h3>
-                                <p class="magic-bento__description">Lauk hangat sedang diracik dan siap diantar ke meja pelanggan.</p>
+                                <h3 class="magic-bento__title">Pesanan Dalam Proses</h3>
+                                <p class="magic-bento__description">Pesanan yang sedang dimasak dan siap disajikan.</p>
+                                <span class="magic-bento__action">Lihat pesanan dapur <i class="fa-solid fa-arrow-right"></i></span>
                             </div>
                         </div>
                         <span class="magic-bento__rim"></span>
                         <span class="magic-bento__border"></span>
-                    </div>
+                    </a>
                 </div>
 
                 <!-- CELL 4: Kitchen Automation Pipeline (Colspan 2, Rowspan 2) -->
                 <div class="magic-bento__cell" style="grid-column: span 2; grid-row: span 2;">
-                    <div class="magic-bento__card" data-clickable="">
+                    <a href="orders.php" class="magic-bento__card magic-bento__card-link" data-clickable="">
                         <span class="magic-bento__light"></span>
                         <canvas class="magic-bento__stars"></canvas>
                         <div class="magic-bento__content">
                             <div class="magic-bento__header">
                                 <span class="magic-bento__icon"><i class="fa-solid fa-kitchen-set" style="color: #10B981;"></i></span>
-                                <span class="magic-bento__label">ALUR OTOMASI DAPUR LIVE</span>
+                                <span class="magic-bento__label">ANTREAN DAPUR HARI INI</span>
                             </div>
                             <div class="magic-bento__visual">
-                                <div class="magic-bento__flow" style="--n: 4;">
-                                    <div class="magic-bento__flow-trigger magic-bento__tile">
-                                        <span class="magic-bento__flow-glyph">
-                                            <i class="fa-solid fa-bell"></i>
-                                        </span>
-                                        <span class="magic-bento__flow-copy">
-                                            <span class="magic-bento__flow-name">Pesanan Masuk Otomatis</span>
-                                            <span class="magic-bento__flow-meta magic-bento__flow-hash">HB-<?= date('Ymd') ?>-LIVE</span>
-                                        </span>
-                                    </div>
-                                    <ol class="magic-bento__steps magic-bento__well">
-                                        <span class="magic-bento__rail" aria-hidden="true">
-                                            <span class="magic-bento__rail-fill"></span>
-                                        </span>
-                                        <li class="magic-bento__step" style="--i: 0;">
-                                            <span class="magic-bento__status">
-                                                <span class="magic-bento__done"><i class="fa-solid fa-check"></i></span>
-                                            </span>
-                                            Verifikasi Pembayaran QRIS / DOKU
-                                            <span class="magic-bento__step-time">Instant</span>
-                                        </li>
-                                        <li class="magic-bento__step" style="--i: 1;">
-                                            <span class="magic-bento__status">
-                                                <span class="magic-bento__done"><i class="fa-solid fa-check"></i></span>
-                                            </span>
-                                            Peracikan Rendang Suntiang & Ayam Pop
-                                            <span class="magic-bento__step-time">4m</span>
-                                        </li>
-                                        <li class="magic-bento__step" style="--i: 2;">
-                                            <span class="magic-bento__status">
-                                                <span class="magic-bento__done"><i class="fa-solid fa-check"></i></span>
-                                            </span>
-                                            Penyajian Nangka Kapau & Sambalado Ijo
-                                            <span class="magic-bento__step-time">2m</span>
-                                        </li>
-                                        <li class="magic-bento__step" style="--i: 3;">
-                                            <span class="magic-bento__status">
-                                                <span class="magic-bento__done" style="background:#10B981;"><i class="fa-solid fa-bell-concierge"></i></span>
-                                            </span>
-                                            Pengantaran ke Meja / Diambil Kurir
-                                            <span class="magic-bento__step-time">Siap</span>
-                                        </li>
-                                    </ol>
+                                <div class="mb-live-list">
+                                    <?php if (empty($kitchenQueue)): ?>
+                                        <div class="mb-empty-state"><i class="fa-solid fa-circle-check"></i><span>Belum ada pesanan aktif hari ini.</span></div>
+                                    <?php else: ?>
+                                        <?php foreach ($kitchenQueue as $queueOrder): ?>
+                                            <?php
+                                                $queueStatusLabels = ['pending' => 'Menunggu', 'confirmed' => 'Dikonfirmasi', 'cooking' => 'Dimasak', 'ready' => 'Siap'];
+                                                $queueLocation = $queueOrder['order_type'] === 'dine_in' ? 'Meja ' . $queueOrder['table_number'] : ucfirst($queueOrder['order_type']);
+                                            ?>
+                                            <div class="mb-live-order">
+                                                <span class="mb-live-order-icon <?= htmlspecialchars($queueOrder['order_status']) ?>"><i class="fa-solid <?= $queueOrder['order_status'] === 'ready' ? 'fa-bell-concierge' : ($queueOrder['order_status'] === 'cooking' ? 'fa-fire-burner' : 'fa-hourglass-half') ?>"></i></span>
+                                                <span class="mb-live-order-copy">
+                                                    <strong><?= htmlspecialchars($queueOrder['order_code']) ?> · <?= htmlspecialchars($queueOrder['customer_name']) ?></strong>
+                                                    <small><?= htmlspecialchars($queueLocation) ?> · <?= date('H:i', strtotime($queueOrder['created_at'])) ?> WIB</small>
+                                                </span>
+                                                <span class="mb-live-order-status <?= htmlspecialchars($queueOrder['order_status']) ?>"><?= htmlspecialchars($queueStatusLabels[$queueOrder['order_status']] ?? $queueOrder['order_status']) ?></span>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                             <div class="magic-bento__text">
-                                <h3 class="magic-bento__title">Siklus Pemenuhan Pesanan</h3>
-                                <p class="magic-bento__description">Otomatisasi pemrosesan cepat sejak pelanggan scan QRIS hingga makanan tiba di meja.</p>
+                                <h3 class="magic-bento__title">Pesanan yang perlu ditangani</h3>
+                                <p class="magic-bento__description">Tampilkan antrean terbaru untuk memperbarui status masak atau penyajian.</p>
+                                <span class="magic-bento__action">Buka antrean dapur <i class="fa-solid fa-arrow-right"></i></span>
                             </div>
                         </div>
                         <span class="magic-bento__rim"></span>
                         <span class="magic-bento__border"></span>
-                    </div>
+                    </a>
                 </div>
 
                 <!-- CELL 5: Live Kitchen Collab (Colspan 2, Rowspan 2) -->
                 <div class="magic-bento__cell" style="grid-column: span 2; grid-row: span 2;">
-                    <div class="magic-bento__card" data-clickable="">
+                    <a href="menu.php" class="magic-bento__card magic-bento__card-link" data-clickable="">
                         <span class="magic-bento__light"></span>
                         <canvas class="magic-bento__stars"></canvas>
                         <div class="magic-bento__content">
                             <div class="magic-bento__header">
-                                <span class="magic-bento__icon"><i class="fa-solid fa-users-gear" style="color: #A78BFA;"></i></span>
-                                <span class="magic-bento__label">KOLABORASI KASIR & KOKI REALTIME</span>
+                                <span class="magic-bento__icon"><i class="fa-solid fa-ranking-star" style="color: #A78BFA;"></i></span>
+                                <span class="magic-bento__label">MENU TERLARIS HARI INI</span>
                             </div>
                             <div class="magic-bento__visual">
-                                <div class="magic-bento__collab magic-bento__well">
-                                    <span class="magic-bento__doc-title">Tiket Pesanan Meja & Dapur</span>
-                                    <div class="magic-bento__lines">
-                                        <span class="magic-bento__line" style="--w: 94%;"></span>
-                                        <span class="magic-bento__line" style="--w: 80%;"></span>
-                                        <span class="magic-bento__line" style="--w: 88%;"></span>
-                                        <span class="magic-bento__line" style="--w: 48%;"></span>
-                                        <span class="magic-bento__line magic-bento__line--gap" style="--w: 90%;"></span>
-                                        <span class="magic-bento__line" style="--w: 72%;">
-                                            <span class="magic-bento__selection" style="--from: 15%; --span: 60%;">
-                                                <span class="magic-bento__caret"></span>
-                                            </span>
-                                        </span>
-                                        <span class="magic-bento__line" style="--w: 84%;"></span>
-                                    </div>
-                                    <!-- Animated Cursor 1: Chef Bundo -->
-                                    <span class="magic-bento__cursor magic-bento__cursor--primary" style="--x: 55%; --y: 48%; --i: 0; --path: magic-bento-path-a;">
-                                        <svg width="16" height="18" viewBox="0 0 16 18"><path d="M2.2 1.6 13.4 9.9c.5.4.3 1.2-.4 1.3l-4.6.6-2.2 4.2c-.3.6-1.2.5-1.4-.1L1.2 2.4c-.2-.6.5-1.1 1-.8Z" stroke-width="1.2" stroke-linejoin="round"></path></svg>
-                                        <span class="magic-bento__cursor-name">Koki Bundo</span>
-                                    </span>
-                                    <!-- Animated Cursor 2: Kasir Uda -->
-                                    <span class="magic-bento__cursor magic-bento__cursor--secondary" style="--x: 28%; --y: 22%; --i: 1; --path: magic-bento-path-b;">
-                                        <svg width="16" height="18" viewBox="0 0 16 18"><path d="M2.2 1.6 13.4 9.9c.5.4.3 1.2-.4 1.3l-4.6.6-2.2 4.2c-.3.6-1.2.5-1.4-.1L1.2 2.4c-.2-.6.5-1.1 1-.8Z" stroke-width="1.2" stroke-linejoin="round"></path></svg>
-                                        <span class="magic-bento__cursor-name">Kasir Uda</span>
-                                    </span>
+                                <div class="mb-ranked-list">
+                                    <?php if (empty($todayBestSellers)): ?>
+                                        <div class="mb-empty-state"><i class="fa-solid fa-bowl-food"></i><span>Belum ada penjualan menu hari ini.</span></div>
+                                    <?php else: ?>
+                                        <?php foreach ($todayBestSellers as $index => $bestSeller): ?>
+                                            <div class="mb-ranked-item">
+                                                <span class="mb-rank-number"><?= $index + 1 ?></span>
+                                                <span class="mb-ranked-name"><?= htmlspecialchars($bestSeller['menu_name']) ?></span>
+                                                <strong><?= (int)$bestSeller['quantity_sold'] ?> terjual</strong>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                             <div class="magic-bento__text">
-                                <h3 class="magic-bento__title">Sinkronisasi Tiket Dapur</h3>
-                                <p class="magic-bento__description">Tiket pesanan otomatis diperbarui bersamaan antara kasir depan dan juru masak.</p>
+                                <h3 class="magic-bento__title">Performa menu berdasarkan jumlah item</h3>
+                                <p class="magic-bento__description">Data berasal dari item pesanan hari ini, tidak termasuk pesanan yang dibatalkan.</p>
+                                <span class="magic-bento__action">Kelola menu <i class="fa-solid fa-arrow-right"></i></span>
                             </div>
                         </div>
                         <span class="magic-bento__rim"></span>
                         <span class="magic-bento__border"></span>
-                    </div>
+                    </a>
                 </div>
 
-                <!-- CELL 6: Integration Hub -->
+                <!-- CELL 6: Payment Mix -->
                 <div class="magic-bento__cell" style="grid-column: span 1; grid-row: span 1;">
-                    <div class="magic-bento__card" data-clickable="">
+                    <a href="orders.php" class="magic-bento__card magic-bento__card-link" data-clickable="">
                         <span class="magic-bento__light"></span>
                         <canvas class="magic-bento__stars"></canvas>
                         <div class="magic-bento__content">
                             <div class="magic-bento__header">
-                                <span class="magic-bento__icon"><i class="fa-solid fa-network-wired" style="color: #38BDF8;"></i></span>
-                                <span class="magic-bento__label">INTEGRASI GATEWAY</span>
+                                <span class="magic-bento__icon"><i class="fa-solid fa-money-bill-transfer" style="color: #38BDF8;"></i></span>
+                                <span class="magic-bento__label">METODE PEMBAYARAN</span>
                             </div>
                             <div class="magic-bento__visual">
-                                <div class="magic-bento__hub">
-                                    <svg class="magic-bento__hub-links" viewBox="0 0 100 100" preserveAspectRatio="none">
-                                        <line x1="20" y1="25" x2="50" y2="50"></line>
-                                        <line x1="80" y1="25" x2="50" y2="50"></line>
-                                        <line x1="20" y1="75" x2="50" y2="50"></line>
-                                        <line x1="80" y1="75" x2="50" y2="50"></line>
-                                    </svg>
-                                    <span class="magic-bento__hub-node magic-bento__tile" style="--x: 20%; --y: 25%; --s: 26px;" title="QRIS Bank Indonesia">
-                                        <i class="fa-solid fa-qrcode" style="font-size:12px; color:#DC2626;"></i>
-                                    </span>
-                                    <span class="magic-bento__hub-node magic-bento__tile" style="--x: 80%; --y: 25%; --s: 26px;" title="DOKU Payment Gateway">
-                                        <i class="fa-solid fa-credit-card" style="font-size:12px; color:#D4AF37;"></i>
-                                    </span>
-                                    <span class="magic-bento__hub-node magic-bento__tile" style="--x: 20%; --y: 75%; --s: 26px;" title="WhatsApp Kasir">
-                                        <i class="fa-brands fa-whatsapp" style="font-size:13px; color:#25D366;"></i>
-                                    </span>
-                                    <span class="magic-bento__hub-node magic-bento__tile" style="--x: 80%; --y: 75%; --s: 26px;" title="MySQL Database">
-                                        <i class="fa-solid fa-database" style="font-size:12px; color:#38BDF8;"></i>
-                                    </span>
-                                    <span class="magic-bento__hub-node magic-bento__tile" style="--x: 50%; --y: 50%; --s: 34px; background: linear-gradient(135deg, #9E1B1B, #D4AF37);">
-                                        <i class="fa-solid fa-utensils" style="font-size:14px; color:#FFFFFF;"></i>
-                                    </span>
+                                <div class="mb-summary-list">
+                                    <?php
+                                        $paymentLabels = ['qris' => 'QRIS', 'doku' => 'DOKU', 'cash' => 'Tunai'];
+                                        foreach ($paymentLabels as $paymentKey => $paymentLabel):
+                                            $paymentCount = (int)($todayPaymentMix[$paymentKey] ?? 0);
+                                    ?>
+                                        <div class="mb-summary-row">
+                                            <span><?= htmlspecialchars($paymentLabel) ?></span>
+                                            <strong><?= $paymentCount ?> pesanan</strong>
+                                        </div>
+                                    <?php endforeach; ?>
                                 </div>
                             </div>
                             <div class="magic-bento__text">
-                                <h3 class="magic-bento__title">Konektivitas Aktif</h3>
-                                <p class="magic-bento__description">QRIS Dinamis, DOKU, WhatsApp dan MariaDB terhubung 100%.</p>
+                                <h3 class="magic-bento__title">Bauran pembayaran hari ini</h3>
+                                <p class="magic-bento__description">Jumlah pesanan tercatat untuk tiap metode.</p>
+                                <span class="magic-bento__action">Lihat transaksi <i class="fa-solid fa-arrow-right"></i></span>
                             </div>
                         </div>
                         <span class="magic-bento__rim"></span>
                         <span class="magic-bento__border"></span>
-                    </div>
+                    </a>
                 </div>
 
-                <!-- CELL 7: Security Shield -->
+                <!-- CELL 7: Menu Availability -->
                 <div class="magic-bento__cell" style="grid-column: span 1; grid-row: span 1;">
-                    <div class="magic-bento__card" data-clickable="">
+                    <a href="menu.php" class="magic-bento__card magic-bento__card-link" data-clickable="">
                         <span class="magic-bento__light"></span>
                         <canvas class="magic-bento__stars"></canvas>
                         <div class="magic-bento__content">
                             <div class="magic-bento__header">
-                                <span class="magic-bento__icon"><i class="fa-solid fa-shield-halved" style="color: #4ADE80;"></i></span>
-                                <span class="magic-bento__label">PROTEKSI ZERO-VULNERABILITY</span>
+                                <span class="magic-bento__icon"><i class="fa-solid fa-boxes-stacked" style="color: #4ADE80;"></i></span>
+                                <span class="magic-bento__label">KETERSEDIAAN MENU</span>
                             </div>
                             <div class="magic-bento__visual">
-                                <div class="magic-bento__shield">
-                                    <div class="magic-bento__setting magic-bento__tile">
-                                        <i class="fa-solid fa-database" style="color:#D4AF37; font-size:11px;"></i>
-                                        <span class="magic-bento__setting-label">Anti-SQLi PDO</span>
-                                        <span class="magic-bento__switch"></span>
-                                    </div>
-                                    <div class="magic-bento__setting magic-bento__tile">
-                                        <i class="fa-solid fa-key" style="color:#10B981; font-size:11px;"></i>
-                                        <span class="magic-bento__setting-label">CSRF Protection</span>
-                                        <span class="magic-bento__switch"></span>
-                                    </div>
+                                <div class="mb-stock-summary">
+                                    <strong><?= $activeMenuCount ?></strong>
+                                    <span>menu tersedia</span>
+                                    <small class="<?= $unavailableMenuCount > 0 ? 'has-unavailable' : '' ?>"><?= $unavailableMenuCount ?> menu tidak tersedia</small>
                                 </div>
                             </div>
                             <div class="magic-bento__text">
-                                <h3 class="magic-bento__title">Keamanan Enterprise</h3>
-                                <p class="magic-bento__description">Sistem terenkripsi penuh tanpa celah injeksi database.</p>
+                                <h3 class="magic-bento__title">Kontrol ketersediaan</h3>
+                                <p class="magic-bento__description">Perbarui stok dari halaman manajemen menu.</p>
+                                <span class="magic-bento__action">Kelola ketersediaan <i class="fa-solid fa-arrow-right"></i></span>
                             </div>
                         </div>
                         <span class="magic-bento__rim"></span>
                         <span class="magic-bento__border"></span>
-                    </div>
+                    </a>
                 </div>
 
             </div>

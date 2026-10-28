@@ -391,10 +391,11 @@
       const valLabel = chart.querySelector('.magic-bento__figure-value');
       const noteLabel = chart.querySelector('.magic-bento__figure-note');
 
-      const CHART_DATA = [320, 480, 620, 850, 1140, 980, 1450, 1680, 1520, 1840];
-      const HOURS = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '16:00', '18:00', '19:00', '20:00'];
+      const CHART_DATA = JSON.parse(plot?.dataset.revenueSeries || '[]').map(Number);
+      const HOURS = JSON.parse(plot?.dataset.bucketLabels || '[]');
+      if (!CHART_DATA.length) return;
       const initialVal = valLabel ? valLabel.textContent : 'Rp 0';
-      const initialNote = noteLabel ? noteLabel.textContent : '+24% vs Kemarin';
+      const initialNote = noteLabel ? noteLabel.textContent : '';
 
       const scrub = e => {
         if (!plot || !scrubLine || !dot) return;
@@ -409,13 +410,13 @@
         chart.dataset.scrub = '';
         scrubLine.style.transform = `translateX(${x.toFixed(1)}px)`;
         const height = rect.height;
-        const max = Math.max(...CHART_DATA);
+        const max = Math.max(1, ...CHART_DATA);
         const min = Math.min(...CHART_DATA) * 0.7;
         const y = height - ((val - min) / (max - min)) * (height - 16) - 8;
         dot.style.transform = `translateY(${y.toFixed(1)}px)`;
 
-        if (valLabel) valLabel.textContent = 'Rp ' + Math.round(val * 1000).toLocaleString('id-ID');
-        if (noteLabel) noteLabel.textContent = `Jam ${HOURS[Math.round(position)] || '12:00'} WIB`;
+        if (valLabel) valLabel.textContent = 'Rp ' + Math.round(val).toLocaleString('id-ID');
+        if (noteLabel) noteLabel.textContent = `Jam ${HOURS[Math.round(position)] || ''} WIB`;
       };
 
       const reset = () => {

@@ -230,6 +230,17 @@
   min-width: 54px;
 }
 
+.mobile-bottom-gooey .gooey-nav__canvas,
+.mobile-bottom-gooey .gooey-nav__fallback {
+  display: none !important;
+}
+
+.mobile-bottom-gooey .gooey-nav__item[data-active] .gooey-nav__link {
+  background: var(--gn-pill);
+  color: var(--gn-active-ink);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.24);
+}
+
 @media (max-width: 380px) {
   .mobile-bottom-gooey .gooey-nav__link {
     padding: 5px 8px;
